@@ -36,8 +36,8 @@ Two properties of the target shape the whole analysis:
    - Model 3: Model 1 plus quadratic terms (`temp²`, `DMC²`)
    - Model 4: Model 3 plus interaction terms (`temp × wind`, `temp × RH`)
 4. **Diagnostics:** R², adjusted R², AIC, BIC, residual plots, Q-Q plots, normality tests, Durbin-Watson and Cook's distance.
-5. **Regularisation:** Ridge, Lasso and ElasticNet tuned with 5-fold cross-validation over an alpha grid.
-6. **Classification:** a binary "large fire" target (burned area above 6.37 ha, the median of the non-zero fires), standardised predictors, a stratified 80/20 train-test split and logistic regression.
+5. **Regularisation:** Ridge, Lasso and ElasticNet tuned with 5-fold cross-validation over an alpha grid from 0.001 to 1000, with scaling done inside each fold and a mean-only predictor as the baseline to beat.
+6. **Classification:** a binary "large fire" target (burned area above 6.37 ha, the median of the non-zero fires), standardised predictors, a stratified 80/20 train-test split (scaling fitted on the training set only) and logistic regression.
 7. **Assumption check:** variance inflation factors (VIF) for multicollinearity.
 
 ![Correlation matrix](images/02_correlation_heatmap.png)
@@ -55,7 +55,7 @@ Two properties of the target shape the whole analysis:
 
 - **No model explains more than 7% of the variation** in log burned area, and the best adjusted R² is 0.023.
 - **The selection criteria disagree.** AIC prefers Model 3, BIC prefers Model 1 and adjusted R² prefers Model 4. When the criteria split like this, it usually means none of the models has found a strong signal.
-- **Models 3 and 4 pass the overall F-test at the 5% level**, mainly through temperature and its squared term. That is a statistically detectable effect, but practically a very small one.
+- **Models 3 and 4 pass the overall F-test at the 5% level**, and only `temp` and `temp²` are individually significant (p < 0.05). `DMC`, `DMC²` and both interaction terms are not. That is a statistically detectable effect, but practically a very small one.
 - **Month and day indicators (Model 2) raise R² but are penalised heavily** by AIC and BIC because they add 17 parameters for little gain.
 
 ### Diagnostics for Model 4
@@ -70,11 +70,12 @@ Two properties of the target shape the whole analysis:
 
 | Model | Best alpha | 5-fold CV MSE |
 |---|---|---|
-| Ridge | 100 | 1.9846 |
-| Lasso | 0.1 | 1.9260 |
-| ElasticNet (l1 ratio 0.5) | 0.1 | 1.9270 |
+| Mean-only baseline | n/a | 1.9541 |
+| Ridge | 1000 (edge of grid) | 1.9544 |
+| Lasso | 0.1 | 1.9282 |
+| ElasticNet (l1 ratio 0.5) | 0.1 | 1.9431 |
 
-A predictor that always guesses the mean scores about 1.95 on the same folds, so even the best regularised model barely improves on it. Ridge landed on the largest alpha in the search grid, and Lasso needed strong shrinkage, both of which are signs that the features carry little information about the target.
+Ridge never beat a model that always predicts the average: its best alpha was the largest value tried, and at that level it simply reproduces the baseline. Lasso did best, but only about 1.3% below the baseline, and ElasticNet about 0.6% below. Lasso's final fit kept just 3 of 29 coefficients, another sign that few features carry any signal.
 
 ![Regularised model coefficients](images/04_regularised_coefficients.png)
 
@@ -94,7 +95,7 @@ The 74% accuracy is misleading. About 74% of fires in the data are "small", and 
 ## Conclusions
 
 - Meteorological variables and FWI indices, used on their own, are weak predictors of how large a fire becomes. This matches the dataset authors' own description of it as "a very difficult regression task."
-- Added model complexity (categoricals, quadratics, interactions) did not produce a model worth deploying. The simplest models are as defensible as the complex ones.
+- Added model complexity (categoricals, quadratics, interactions) did not produce a model worth deploying, and regularisation barely improved on a mean-only prediction. The simplest models are as defensible as the complex ones.
 - For the classification task, accuracy alone would have made a useless model look acceptable. Recall, ROC-AUC and the confusion matrix showed the real picture.
 
 ## Limitations and Next Steps
@@ -119,7 +120,7 @@ pip install -r requirements.txt
 jupyter notebook C06M08Lab.ipynb
 ```
 
-The notebook downloads the data with `ucimlrepo`, so it needs an internet connection on first run. `forestfires.csv` and `forestfires.names` are included as an offline copy and as documentation of the variables.
+The notebook downloads the data with `ucimlrepo` and falls back to the local `forestfires.csv` if the download fails, so it also runs offline. `forestfires.names` documents the variables.
 
 ## Repository Contents
 
